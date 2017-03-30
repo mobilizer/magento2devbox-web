@@ -62,3 +62,71 @@ By default, to save installation time, no warmup is performed. If you would like
 
 By default, to save batteries/energy, cron is disabled. Our experience shows, that running cron in container results in very quick draining of laptop batteries. To enable cron, you can follow the instructions in the documentation http://devdocs.magento.com/guides/v2.1/install-gde/docker/docker-commands.html.
 
+# MacOS: Fast file access using docker-sync
+Current default Docker file access is slow on macOS. Fast file access and fast `magento` CLI can be achieved by installing Unison on the host macOS and using [docker-sync](https://github.com/EugenMayer/docker-sync) to synchronize the volumes (INSTEAD of the Unison service bundled with this container).
+
+Install docker-sync and Unison on your host:
+
+    gem install docker-sync
+    brew install unison
+    easy_install pip && pip install macfsevents
+    
+    
+Edit the docker-compose.yml in your Magento 2 devbox "build-*"-folder:
+
+    services:
+        web:
+            [...]
+            volumes:
+              - "magento-web-docker-sync:/var/www/magento2:rw"
+              - "~/.composer:/home/magento2/.composer"
+              - "~/.ssh:/home/magento2/.ssh"
+              - "./shared/logs/apache2:/var/log/apache2"
+              - "./shared/logs/php-fpm:/var/log/php-fpm"
+              - "./shared/.magento-cloud:/home/magento2/.magento-cloud"
+            environment:
+              # Disable container internal Unison service:
+              - USE_SHARED_WEBROOT=1
+              - USE_UNISON_SYNC=0 
+            [...]
+            
+         db:
+            [...]
+            volumes:
+              - "magneto-db-docker-sync:/var/lib/mysql:rw"
+              - "./shared/var/logs/mysql:/var/log/mysql"
+              
+Declare volumes as external in docker-compose.yml:  	
+              
+    # docker-sync
+    volumes:
+      magneto-web-docker-sync:
+        external: true
+      magento-db-docker-sync:
+        external: true             
+        
+Add a docker-sync.yml file with the following content:
+
+  	version: "2"
+	options:
+	  verbose: true
+	syncs:
+	  magneto-web-docker-sync:
+	    src: './shared/webroot'
+	    dest: '/var/www/magento2'
+	    sync_excludes: ['var']
+	  magneto-db-docker-sync:
+	    src: './shared/db'
+	    dest: '/var/lib/mysql'
+
+
+Start docker-sync in an extra terminal. (It is blocking and will continue running.)
+
+    docker-sync start
+    
+Init Magento2devbox as usual
+
+	./m2devbox-init.sh
+	
+
+	    
